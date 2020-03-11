@@ -30,9 +30,7 @@ namespace ImageRegistration
                 I2[i, 0] = P2[i].X;
                 I2[i, 1] = P2[i].Y;
             }
-            Matrix parameters =  LLOptimization(I1, I2);
-            double a = parameters[0, 0]; double b = parameters[1, 0]; double t1 = parameters[2, 0]; double t2 = parameters[3, 0];
-            return new Transformation(a, b, t1, t2);
+            return GenerateT(I1, I2);
 
         }
 
