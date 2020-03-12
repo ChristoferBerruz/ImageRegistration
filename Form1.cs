@@ -28,16 +28,21 @@ namespace ImageRegistration
         /// <param name="e"></param>
         private void btnCreateShapes_Click(object sender, EventArgs e)
         {
-            CreatePointLists();
+            CreateShape1();
             //We are going to map the point in the Shape1 to some other points using an arbitrary transformation
             Transformation T = new Transformation(1.05, 0.05, 15, 22);
             Shape2 = utils.ApplyTransformation(T, Shape1);
             Shape2[2] = new Point(Shape2[2].X + 10, Shape2[2].Y + 3); //Creating some noise that does not obey a transformation
-            DrawOnPanel(panOriginal);
-            
+            //Adding outliers to dataset
+            Point ptOutlier1 = new Point(200, 230);
+            Shape1.Add(ptOutlier1);
+            Point ptOutLier2 = new Point(270, 160);
+            Shape2.Add(ptOutLier2);
+            DrawOnPanel(panOriginal, Shape1, Shape2);
+
         }
 
-        void DrawOnPanel(Panel pan)
+        void DrawOnPanel(Panel pan, List<Point> Shape1, List<Point> Shape2)
         {
             //Drawing the shapes on the panel
             Pen blue = new Pen(Brushes.Blue, 1);
@@ -47,7 +52,7 @@ namespace ImageRegistration
             DisplayShape(Shape2, red, g);
         }
 
-        void CreatePointLists()
+        void CreateShape1()
         {
             Shape1.Clear();
             Shape2.Clear();
@@ -79,8 +84,40 @@ namespace ImageRegistration
         private void btnApplyTransform_Click(object sender, EventArgs e)
         {
             Transformation T = utils.GenerateT(P1:Shape1, P2:Shape2);
-            Shape2 = utils.ApplyTransformation(T, Shape2);
-            DrawOnPanel(panAfterT);
+            List<Point> Shape2Trans = utils.ApplyTransformation(T, Shape2);
+            DrawOnPanel(panAfterT, Shape1, Shape2Trans);
+        }
+
+        private void btnOutlierRem_Click(object sender, EventArgs e)
+        {
+            panRemoval.Controls.Clear();
+            List<Point> cleanedShape1 = new List<Point>();
+            List<Point> cleanedShape2 = new List<Point>();
+            Ransac RansacForm = new Ransac();
+            if(DialogResult.OK == RansacForm.ShowDialog())
+            {
+                double bestCost = 0;
+                Transformation bestT = null;
+                int n = (int)(RansacForm.InitPercent * Shape1.Count);
+                int d = (int)(RansacForm.TotalPercent * Shape1.Count);
+                double tresh = RansacForm.Treshold;
+                int iterations = RansacForm.Iterations;
+                utils.Ransac(Shape1, Shape2, n, tresh, d, iterations, ref cleanedShape1, ref cleanedShape2, ref bestCost, ref bestT);
+                if (bestT != null)
+                {
+                    //We found a transformation though ransac
+                    cleanedShape2 = utils.ApplyTransformation(bestT, cleanedShape2);
+                    DrawOnPanel(panRemoval, cleanedShape1, cleanedShape2);
+                    String s = "Iter: {0}, N: {1}, D: {2}, Tresh:{3}";
+                    MessageBox.Show(String.Format(s, iterations, n, d, tresh));
+
+                }
+                else
+                {
+                    MessageBox.Show("No good transformation found!");
+                }
+            }
+            
         }
     }
 }
