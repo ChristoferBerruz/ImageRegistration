@@ -89,5 +89,107 @@ namespace ImageRegistration
             }
             return Result;
         }
+
+        /// <summary>
+        /// Computing cost of a transformation T in a set of points
+        /// </summary>
+        /// <param name="T"></param>
+        /// <param name="ExpectedPoints"></param>
+        /// <param name="Points"></param>
+        /// <returns></returns>
+        public double ComputeOverallCost(Transformation T, List<Point> ExpectedPoints, List<Point> Points)
+        {
+            double cost = 0.0;
+            //We assume mapping is one to one, in order
+            for(int i = 0; i < Points.Count; i++)
+            {
+                cost += ComputeSingleCost(T, ExpectedPoints[i], Points[i]); //squared distance between points
+            }
+            return cost;
+        }
+
+        public double ComputeSingleCost(Transformation T, Point p, Point P2)
+        {
+            Point prime = T.MapPoint(P2);
+            return (p.X - prime.X) * (p.X - prime.X) + (p.Y - prime.Y) * (p.Y - prime.Y);
+        }
+
+        /// <summary>
+        /// Ransac algorithm for removing outliers of the dataset. We are trying to find the best Transformation
+        /// </summary>
+        /// <param name="Shape1"> Original points</param>
+        /// <param name="Shape2"> Mapped Points</param>
+        /// <param name="nStartingPoints"> N intially random picked points</param>
+        /// <param name="tresh"> Treshold to accept a datum, keep in mind that here cost is distance squared</param>
+        /// <param name="nTotalPoints"> Lower bound on how many points is need for the consesus set to be representative</param>
+        /// <param name="cleanedShape1"> Best consensus set of Shape1</param>
+        /// <param name="cleanedShape2">Best consensus set of Shape2</param>
+        /// <param name="bestCost"> Best cost of the current Transformation</param>
+        /// <param name="bestT"> Best Transformation</param>
+        public void Ransac(List<Point> Shape1, List<Point>Shape2, int nStartingPoints, double tresh, int nTotalPoints, int iterations,  ref List<Point> cleanedShape1, ref List<Point> cleanedShape2, 
+            ref double bestCost, ref Transformation bestT)
+        {
+            //Max number of iterations of the algorithm
+            for(int i = 0; i < iterations; i++)
+            {
+                bool[] indexUsed = new bool[Shape2.Count];
+                List<Point> curShape1 = new List<Point>(); List<Point> curShape2 = new List<Point>();
+                PickRandomPoints(nStartingPoints, Shape1, Shape2, ref indexUsed, ref curShape1, ref curShape2);
+                Transformation T = GenerateT(curShape1, curShape2); //Model that best fits the current set
+                //Now try to add a point into the current consensus set  based on treshold,
+                for(int j  = 0; j < Shape2.Count; j++)
+                {
+                    if(!indexUsed[j])//Only points that have not been added
+                    {
+                        double cost = ComputeSingleCost(T, Shape1[j], Shape2[j]); // How good does this datum fit the consensus set model
+                        if(cost<tresh)
+                        {
+                            //We add to the current consensus set
+                            curShape1.Add(Shape1[j]); curShape2.Add(Shape2[j]);
+                        }
+                    }
+                }
+
+                //We need to check if we added at least nTotalPoints
+                if(curShape1.Count > nTotalPoints)
+                {
+                    T = GenerateT(curShape1, curShape2); //Finding the transformation that fits this consesus set
+                    //We now compute the error of this transformation on ALL the dataset
+                    double curCost = ComputeOverallCost(T, Shape1, Shape2);
+                    if(i == 0)
+                    {
+                        //It is the first iteration, so we just the current cost is the best cost
+                        bestCost = curCost;
+                    }
+
+                    if (curCost <= bestCost)
+                    { 
+                            bestT = T;
+                            bestCost = curCost;
+                            cleanedShape1 = curShape1;
+                            cleanedShape2 = curShape2;
+                    }
+                    
+                }
+
+            }
+            
+        }
+
+        public void PickRandomPoints(int n, List<Point> Shape1, List<Point> Shape2, ref bool[] indexes, ref List<Point> R1, ref List<Point> R2)
+        {
+            Random rand = new Random();
+            int curpicked = 0;
+            do
+            {
+                int idx = rand.Next(0, Shape1.Count);
+                if (!indexes[idx])
+                {
+                    indexes[idx] = true;
+                    curpicked += 1;
+                    R1.Add(Shape1[idx]); R2.Add(Shape2[idx]);
+                }
+            } while (curpicked < n);
+        }
     }
 }
